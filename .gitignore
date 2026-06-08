@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+.DS_Store
+npm-debug.log*
+
+# Backend runtime artifacts & secrets
+server/data
+server/node_modules
+.env
+*.log
+coverage
