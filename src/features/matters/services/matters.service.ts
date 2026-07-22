@@ -1,0 +1,142 @@
+import { supabase } from '@/shared/lib/supabase'
+import type { MatterStatus } from '@/shared/types/database.types'
+import type { MatterFormValues } from '@/features/matters/schemas'
+import type { MatterEventRow, MatterNoteRow, MatterRow } from '@/features/matters/types'
+
+const MATTER_SELECT =
+  '*, client:clients(id, display_name, type), lead_lawyer:profiles!matters_lead_lawyer_id_fkey(id, full_name, avatar_url)'
+
+export interface MatterFilters {
+  search?: string
+  status?: MatterStatus | 'all'
+  practiceArea?: string | 'all'
+}
+
+function toRow(values: MatterFormValues) {
+  return {
+    title: values.title.trim(),
+    client_id: values.clientId || null,
+    practice_area: values.practiceArea || null,
+    status: values.status,
+    priority: values.priority,
+    lead_lawyer_id: values.leadLawyerId || null,
+    opposing_counsel: values.opposingCounsel?.trim() || null,
+    court: values.court?.trim() || null,
+    judge: values.judge?.trim() || null,
+    description: values.description?.trim() || null,
+  }
+}
+
+export const mattersService = {
+  async list(organizationId: string, filters: MatterFilters = {}): Promise<MatterRow[]> {
+    let q = supabase
+      .from('matters')
+      .select(MATTER_SELECT)
+      .eq('organization_id', organizationId)
+      .order('created_at', { ascending: false })
+    if (filters.status && filters.status !== 'all') q = q.eq('status', filters.status)
+    if (filters.practiceArea && filters.practiceArea !== 'all') q = q.eq('practice_area', filters.practiceArea)
+    if (filters.search?.trim()) {
+      const s = `%${filters.search.trim()}%`
+      q = q.or(`title.ilike.${s},matter_number.ilike.${s}`)
+    }
+    const { data, error } = await q
+    if (error) throw error
+    return (data ?? []) as unknown as MatterRow[]
+  },
+
+  async get(id: string): Promise<MatterRow> {
+    const { data, error } = await supabase.from('matters').select(MATTER_SELECT).eq('id', id).single()
+    if (error) throw error
+    return data as unknown as MatterRow
+  },
+
+  async create(organizationId: string, values: MatterFormValues, createdBy: string | null): Promise<MatterRow> {
+    const { data, error } = await supabase
+      .from('matters')
+      .insert({ organization_id: organizationId, created_by: createdBy, ...toRow(values) })
+      .select(MATTER_SELECT)
+      .single()
+    if (error) throw error
+    const row = data as unknown as MatterRow
+    await supabase.rpc('log_audit', {
+      p_org: organizationId,
+      p_action: 'matter.created',
+      p_entity_type: 'matter',
+      p_entity_id: row.id,
+      p_summary: `Opened matter ${row.matter_number ?? ''} — ${row.title}`,
+    })
+    return row
+  },
+
+  async update(id: string, organizationId: string, values: MatterFormValues): Promise<MatterRow> {
+    const patch = {
+      ...toRow(values),
+      closed_on: ['closed', 'won', 'lost'].includes(values.status) ? new Date().toISOString().slice(0, 10) : null,
+    }
+    const { data, error } = await supabase.from('matters').update(patch).eq('id', id).select(MATTER_SELECT).single()
+    if (error) throw error
+    const row = data as unknown as MatterRow
+    await supabase.rpc('log_audit', {
+      p_org: organizationId,
+      p_action: 'matter.updated',
+      p_entity_type: 'matter',
+      p_entity_id: id,
+      p_summary: `Updated matter ${row.matter_number ?? ''}`,
+    })
+    return row
+  },
+
+  async remove(id: string, organizationId: string, label: string): Promise<void> {
+    const { error } = await supabase.from('matters').delete().eq('id', id)
+    if (error) throw error
+    await supabase.rpc('log_audit', {
+      p_org: organizationId,
+      p_action: 'matter.deleted',
+      p_entity_type: 'matter',
+      p_entity_id: id,
+      p_summary: `Deleted matter ${label}`,
+    })
+  },
+
+  // Notes ---------------------------------------------------------------------
+  async listNotes(matterId: string): Promise<MatterNoteRow[]> {
+    const { data, error } = await supabase
+      .from('matter_notes')
+      .select('*, author:profiles(id, full_name, avatar_url)')
+      .eq('matter_id', matterId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as unknown as MatterNoteRow[]
+  },
+
+  async addNote(organizationId: string, matterId: string, body: string, authorId: string | null): Promise<void> {
+    const { error } = await supabase
+      .from('matter_notes')
+      .insert({ organization_id: organizationId, matter_id: matterId, author_id: authorId, body })
+    if (error) throw error
+  },
+
+  async deleteNote(id: string): Promise<void> {
+    const { error } = await supabase.from('matter_notes').delete().eq('id', id)
+    if (error) throw error
+  },
+
+  // Tracking timeline ---------------------------------------------------------
+  async listEvents(matterId: string): Promise<MatterEventRow[]> {
+    const { data, error } = await supabase
+      .from('matter_events')
+      .select('*, actor:profiles(id, full_name, avatar_url)')
+      .eq('matter_id', matterId)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as unknown as MatterEventRow[]
+  },
+
+  async addEvent(organizationId: string, matterId: string, summary: string, actorId: string | null): Promise<void> {
+    const { error } = await supabase
+      .from('matter_events')
+      .insert({ organization_id: organizationId, matter_id: matterId, actor_id: actorId, kind: 'update', summary })
+    if (error) throw error
+  },
+}

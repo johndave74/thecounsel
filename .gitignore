@@ -2,13 +2,19 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
 .vite
 .DS_Store
 npm-debug.log*
-
-# Backend runtime artifacts & secrets
-server/data
-server/node_modules
-.env
 *.log
 coverage
+
+# Supabase CLI local state
+supabase/.branches
+supabase/.temp
+
+# Legacy Express backend (superseded by Supabase)
+server/data
+server/node_modules

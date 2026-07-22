@@ -1,0 +1,7 @@
+-- ============================================================================
+-- Intentionally empty. No seed data.
+--
+-- The FIRST user to sign up automatically becomes the Platform Owner
+-- (see migration 0005). Everything else — organizations, users, invitations —
+-- is created from inside the app.
+-- ============================================================================

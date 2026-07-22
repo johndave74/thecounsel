@@ -1,0 +1,131 @@
+import * as React from 'react'
+import { Search, Users, Scale, Briefcase } from 'lucide-react'
+import { useAuth } from '@/features/auth/context/auth-provider'
+import { usePermissions } from '@/features/auth/hooks/use-permissions'
+import { useFirmMembers } from '@/features/matters/hooks/use-matters'
+import { useMatters } from '@/features/matters/hooks/use-matters'
+import { useStaffProfiles } from '@/features/staff/hooks/use-staff'
+import { StaffProfileDialog } from '@/features/staff/components/staff-profile-dialog'
+import { AVAILABILITY_META, type StaffMember } from '@/features/staff/types'
+import { PageHeader } from '@/shared/components/page-header'
+import { Card } from '@/shared/components/ui/card'
+import { Input } from '@/shared/components/ui/input'
+import { Badge } from '@/shared/components/ui/badge'
+import { Skeleton } from '@/shared/components/ui/skeleton'
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avatar'
+import { initialsOf } from '@/shared/lib/format'
+
+export function StaffPage() {
+  const { activeOrgId } = useAuth()
+  const { has } = usePermissions()
+  const { data: members, isLoading } = useFirmMembers(activeOrgId)
+  const { data: profiles } = useStaffProfiles(activeOrgId)
+  const { data: matters } = useMatters(activeOrgId, {})
+  const [search, setSearch] = React.useState('')
+  const [selected, setSelected] = React.useState<StaffMember | null>(null)
+
+  const canManage = has('staff.manage')
+  const profileByUser = React.useMemo(() => new Map((profiles ?? []).map((p) => [p.user_id, p])), [profiles])
+  const activeCountByUser = React.useMemo(() => {
+    const map = new Map<string, number>()
+    for (const m of matters ?? []) {
+      if (m.lead_lawyer_id && !['closed', 'won', 'lost'].includes(m.status)) {
+        map.set(m.lead_lawyer_id, (map.get(m.lead_lawyer_id) ?? 0) + 1)
+      }
+    }
+    return map
+  }, [matters])
+
+  const roster: StaffMember[] = (members ?? [])
+    .filter((m) => {
+      const name = m.profile?.full_name ?? m.profile?.email ?? ''
+      return name.toLowerCase().includes(search.toLowerCase())
+    })
+    .map((member) => ({
+      member,
+      profile: profileByUser.get(member.user_id) ?? null,
+      activeMatters: activeCountByUser.get(member.user_id) ?? 0,
+    }))
+
+  const assignedMattersFor = (userId: string) =>
+    (matters ?? []).filter((m) => m.lead_lawyer_id === userId)
+
+  return (
+    <div>
+      <PageHeader title="Lawyers & Staff" description="Your firm's team, qualifications and workload." />
+
+      <div className="mb-4 max-w-md">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search team…" className="pl-9" />
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-44 w-full rounded-lg" />)}
+        </div>
+      ) : roster.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {roster.map((s) => {
+            const avail = AVAILABILITY_META[s.profile?.availability ?? 'available'] ?? AVAILABILITY_META.available
+            return (
+              <Card
+                key={s.member.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelected(s)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSelected(s)}
+                className="cursor-pointer p-5 transition-colors hover:border-primary/40"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-12 w-12">
+                      {s.member.profile?.avatar_url && <AvatarImage src={s.member.profile.avatar_url} alt="" />}
+                      <AvatarFallback>{initialsOf(s.member.profile?.full_name, 'U')}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{s.member.profile?.full_name ?? s.member.profile?.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">{s.member.role?.name}</p>
+                    </div>
+                  </div>
+                  <Badge variant={avail.variant}>{avail.label}</Badge>
+                </div>
+
+                {s.profile?.specializations && s.profile.specializations.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {s.profile.specializations.slice(0, 3).map((sp) => (
+                      <Badge key={sp} variant="outline" className="text-[11px]">{sp}</Badge>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-4 flex items-center gap-4 border-t border-border pt-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><Briefcase className="h-3.5 w-3.5" /> {s.activeMatters} active</span>
+                  {s.profile?.bar_number && <span className="flex items-center gap-1.5"><Scale className="h-3.5 w-3.5" /> {s.profile.bar_number}</span>}
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      ) : (
+        <Card className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/12 text-primary"><Users className="h-7 w-7" /></span>
+          <p className="font-display text-lg font-semibold">No team members yet</p>
+          <p className="max-w-sm text-sm text-muted-foreground">Add users from Firm Settings and they'll appear here.</p>
+        </Card>
+      )}
+
+      {selected && (
+        <StaffProfileDialog
+          member={selected.member}
+          profile={selected.profile}
+          assignedMatters={assignedMattersFor(selected.member.user_id)}
+          canManage={canManage}
+          open={Boolean(selected)}
+          onOpenChange={(o) => !o && setSelected(null)}
+        />
+      )}
+    </div>
+  )
+}

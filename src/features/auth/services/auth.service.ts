@@ -1,0 +1,94 @@
+import { supabase } from '@/shared/lib/supabase'
+import type { PermissionKey } from '@/shared/lib/permissions'
+import type { Profile } from '@/shared/types/database.types'
+import type { ActiveMembership } from '@/features/auth/types'
+
+/** Authentication + identity data access. The app's only backend is Supabase. */
+export const authService = {
+  async getSessionUserId(): Promise<string | null> {
+    const { data } = await supabase.auth.getSession()
+    return data.session?.user.id ?? null
+  },
+
+  async signIn(email: string, password: string): Promise<void> {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
+  },
+
+  /**
+   * Register a new account. Access is still gated by organization membership,
+   * so a fresh account can sign in but only sees its pending invitations until
+   * one is accepted. Returns whether a session was established immediately
+   * (email confirmation disabled) or an email must be confirmed first.
+   */
+  async signUp(
+    email: string,
+    password: string,
+    fullName: string,
+  ): Promise<{ needsConfirmation: boolean }> {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName } },
+    })
+    if (error) throw error
+    return { needsConfirmation: !data.session }
+  },
+
+  async signOut(): Promise<void> {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  },
+
+  async sendPasswordReset(email: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+    if (error) throw error
+  },
+
+  async updatePassword(newPassword: string): Promise<void> {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) throw error
+  },
+
+  async getProfile(userId: string): Promise<Profile | null> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle()
+    if (error) throw error
+    return data
+  },
+
+  async getMemberships(userId: string): Promise<ActiveMembership[]> {
+    const { data, error } = await supabase
+      .from('memberships')
+      .select('*, role:roles(*), organization:organizations(*)')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+    if (error) throw error
+    return (data ?? []) as unknown as ActiveMembership[]
+  },
+
+  async getPermissionKeys(roleId: string): Promise<PermissionKey[]> {
+    const { data, error } = await supabase
+      .from('role_permissions')
+      .select('permission:permissions(key)')
+      .eq('role_id', roleId)
+    if (error) throw error
+    return (data ?? [])
+      .map((row) => (row as { permission: { key: string } | null }).permission?.key)
+      .filter((k): k is PermissionKey => Boolean(k))
+  },
+
+  async touchLastSeen(userId: string): Promise<void> {
+    await supabase.from('profiles').update({ last_seen_at: new Date().toISOString() }).eq('id', userId)
+  },
+
+  async acceptInvitation(token: string): Promise<void> {
+    const { error } = await supabase.rpc('accept_invitation', { p_token: token })
+    if (error) throw error
+  },
+}

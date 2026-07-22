@@ -1,0 +1,351 @@
+import { supabase } from '@/shared/lib/supabase'
+import { adminUsersService } from '@/shared/services/admin-users.service'
+import type {
+  AuditLog,
+  BillingCycle,
+  Json,
+  OrgStatus,
+  Organization,
+  Plan,
+  SubscriptionStatus,
+} from '@/shared/types/database.types'
+
+export interface PlanInput {
+  id?: string
+  name: string
+  description?: string | null
+  price_monthly?: number
+  price_yearly?: number
+  max_users?: number | null
+  storage_gb?: number
+  support_level?: string
+  features?: Json
+  highlights?: string[]
+  is_active?: boolean
+}
+import type {
+  GrowthPoint,
+  MemberDirectoryRow,
+  OrgRow,
+  PlatformStats,
+  SubscriptionRow,
+  SubscriptionWithPlan,
+} from '@/features/platform/types'
+
+const ORG_SELECT = '*, memberships(count), subscription:subscriptions(*, plan:plans(*))'
+
+/** Monthly-equivalent revenue contribution of one active subscription. */
+function monthlyValue(sub: { billing_cycle: BillingCycle; plan: Plan | null } | null): number {
+  if (!sub?.plan) return 0
+  return sub.billing_cycle === 'yearly' ? Number(sub.plan.price_yearly) / 12 : Number(sub.plan.price_monthly)
+}
+
+function mapOrg(row: unknown): OrgRow {
+  const r = row as Organization & {
+    memberships: { count: number }[]
+    subscription: SubscriptionWithPlan[] | SubscriptionWithPlan | null
+  }
+  const { memberships, subscription, ...rest } = r
+  const sub = Array.isArray(subscription) ? (subscription[0] ?? null) : subscription
+  return { ...rest, member_count: memberships?.[0]?.count ?? 0, subscription: sub }
+}
+
+export const platformService = {
+  async listOrganizations(includeDeleted = false): Promise<OrgRow[]> {
+    let q = supabase.from('organizations').select(ORG_SELECT).order('created_at', { ascending: false })
+    q = includeDeleted ? q.not('deleted_at', 'is', null) : q.is('deleted_at', null)
+    const { data, error } = await q
+    if (error) throw error
+    return (data ?? []).map(mapOrg)
+  },
+
+  async getStats(): Promise<PlatformStats> {
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    const startOfDay = new Date()
+    startOfDay.setHours(0, 0, 0, 0)
+
+    const activeOrgs = supabase.from('organizations').select('*', { count: 'exact', head: true }).is('deleted_at', null)
+
+    const [
+      totalOrganizations,
+      paidOrganizations,
+      trialOrganizations,
+      suspendedOrganizations,
+      totalUsers,
+      platformUsers,
+      auditEvents,
+      organizationsThisMonth,
+      signedInToday,
+      subs,
+    ] = await Promise.all([
+      activeOrgs.then((r) => r.count ?? 0),
+      supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('status', 'active').is('deleted_at', null).then((r) => r.count ?? 0),
+      supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('status', 'trial').is('deleted_at', null).then((r) => r.count ?? 0),
+      supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('status', 'suspended').is('deleted_at', null).then((r) => r.count ?? 0),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_platform_admin', false).then((r) => r.count ?? 0),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_platform_admin', true).then((r) => r.count ?? 0),
+      supabase.from('audit_logs').select('*', { count: 'exact', head: true }).then((r) => r.count ?? 0),
+      supabase.from('organizations').select('*', { count: 'exact', head: true }).gte('created_at', startOfMonth.toISOString()).then((r) => r.count ?? 0),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('last_seen_at', startOfDay.toISOString()).then((r) => r.count ?? 0),
+      supabase.from('subscriptions').select('billing_cycle, status, plan:plans(price_monthly, price_yearly)').eq('status', 'active'),
+    ])
+
+    const mrr = ((subs.data ?? []) as unknown as { billing_cycle: BillingCycle; plan: Plan | null }[]).reduce(
+      (sum, s) => sum + monthlyValue(s),
+      0,
+    )
+
+    return {
+      totalOrganizations,
+      paidOrganizations,
+      trialOrganizations,
+      suspendedOrganizations,
+      totalUsers,
+      platformUsers,
+      organizationsThisMonth,
+      auditEvents,
+      signedInToday,
+      mrr,
+      arr: mrr * 12,
+    }
+  },
+
+  async setOrganizationStatus(id: string, status: OrgStatus): Promise<void> {
+    const { error } = await supabase.from('organizations').update({ status }).eq('id', id)
+    if (error) throw error
+    await supabase.rpc('log_audit', {
+      p_org: id,
+      p_action: `organization.${status === 'suspended' ? 'suspended' : 'reactivated'}`,
+      p_entity_type: 'organization',
+      p_entity_id: id,
+      p_summary: `Organization status set to ${status}`,
+    })
+  },
+
+  async softDeleteOrganization(id: string): Promise<void> {
+    const { error } = await supabase.rpc('soft_delete_organization', { p_org: id })
+    if (error) throw error
+  },
+
+  async restoreOrganization(id: string): Promise<void> {
+    const { error } = await supabase.rpc('restore_organization', { p_org: id })
+    if (error) throw error
+  },
+
+  async hardDeleteOrganization(id: string): Promise<void> {
+    const { error } = await supabase.rpc('hard_delete_organization', { p_org: id })
+    if (error) throw error
+  },
+
+  async updateOrganization(
+    id: string,
+    patch: {
+      name?: string
+      legal_name?: string | null
+      industry?: string | null
+      website?: string | null
+      phone?: string | null
+      billing_email?: string | null
+    },
+  ): Promise<void> {
+    const { error } = await supabase.from('organizations').update(patch).eq('id', id)
+    if (error) throw error
+    await supabase.rpc('log_audit', {
+      p_org: id,
+      p_action: 'organization.updated',
+      p_entity_type: 'organization',
+      p_entity_id: id,
+      p_summary: 'Organization details updated',
+    })
+  },
+
+  async createOrganizationWithAdmin(input: {
+    name: string
+    slug: string
+    legalName?: string | null
+    planId: string | null
+    trial: boolean
+    billingCycle: BillingCycle
+    adminEmail: string
+    adminName: string
+    adminPassword: string
+  }): Promise<Organization> {
+    // Pre-check the slug (including trashed orgs) so we fail early with a clear
+    // message instead of hitting the unique constraint mid-flow.
+    const { data: existing } = await supabase
+      .from('organizations')
+      .select('id, deleted_at')
+      .eq('slug', input.slug.toLowerCase())
+      .maybeSingle()
+    if (existing) {
+      throw new Error(
+        existing.deleted_at
+          ? `An organization with the slug "${input.slug}" is in Trash. Restore it or delete it permanently, or choose a different slug.`
+          : `An organization with the slug "${input.slug}" already exists. Choose a different name or slug.`,
+      )
+    }
+
+    // The org admin must be a brand-new account. Reject an email that already
+    // has one (e.g. your own platform-owner login) — otherwise we'd hijack it.
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id, is_platform_admin')
+      .eq('email', input.adminEmail)
+      .maybeSingle()
+    if (existingProfile) {
+      throw new Error(
+        existingProfile.is_platform_admin
+          ? `${input.adminEmail} is a platform account. Use a separate email for the firm's administrator.`
+          : `${input.adminEmail} already has an account. Use a different email for the firm's administrator.`,
+      )
+    }
+
+    const { data: org, error } = await supabase.rpc('create_organization', {
+      p_name: input.name,
+      p_slug: input.slug,
+      p_legal_name: input.legalName ?? null,
+      p_plan_id: input.planId,
+      p_trial: input.trial,
+      p_billing_cycle: input.billingCycle,
+    })
+    if (error) throw new Error(error.message || 'The database rejected the organization.')
+    const organization = org as Organization
+
+    // Seat the org admin. If this fails the org would be orphaned (and its slug
+    // would block retries), so roll the organization back and surface why.
+    try {
+      await adminUsersService.createUser({
+        email: input.adminEmail,
+        password: input.adminPassword,
+        fullName: input.adminName,
+        organizationId: organization.id,
+        roleKey: 'managing_partner',
+        title: 'Managing Partner',
+      })
+    } catch (adminErr) {
+      try {
+        await supabase.rpc('soft_delete_organization', { p_org: organization.id })
+        await supabase.rpc('hard_delete_organization', { p_org: organization.id })
+      } catch {
+        /* best-effort cleanup */
+      }
+      const reason = adminErr instanceof Error ? adminErr.message : 'Unknown error'
+      throw new Error(`Organization admin could not be created: ${reason}. No organization was created — please try again.`)
+    }
+    return organization
+  },
+
+  async listAllMembers(): Promise<MemberDirectoryRow[]> {
+    const { data, error } = await supabase
+      .from('memberships')
+      .select(
+        '*, user:profiles!memberships_user_id_fkey(id, full_name, email, avatar_url, last_seen_at), organization:organizations(id, name, slug), role:roles(id, name, key)',
+      )
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as unknown as MemberDirectoryRow[]
+  },
+
+  async getRecentActivity(limit = 12): Promise<AuditLog[]> {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) throw error
+    return data ?? []
+  },
+
+  async getOrganizationGrowth(months = 6): Promise<GrowthPoint[]> {
+    const since = new Date()
+    since.setMonth(since.getMonth() - (months - 1))
+    since.setDate(1)
+    since.setHours(0, 0, 0, 0)
+    const { data, error } = await supabase.from('organizations').select('created_at').gte('created_at', since.toISOString())
+    if (error) throw error
+
+    const buckets: GrowthPoint[] = []
+    const fmt = new Intl.DateTimeFormat('en', { month: 'short' })
+    for (let i = 0; i < months; i++) {
+      const d = new Date(since)
+      d.setMonth(since.getMonth() + i)
+      buckets.push({ label: fmt.format(d), value: 0 })
+    }
+    for (const row of data ?? []) {
+      const created = new Date(row.created_at)
+      const idx = (created.getFullYear() - since.getFullYear()) * 12 + created.getMonth() - since.getMonth()
+      if (idx >= 0 && idx < buckets.length) buckets[idx].value += 1
+    }
+    let running = 0
+    return buckets.map((b) => ({ label: b.label, value: (running += b.value) }))
+  },
+
+  // ── Plans ────────────────────────────────────────────────────────────────
+  async listPlans(): Promise<Plan[]> {
+    const { data, error } = await supabase.from('plans').select('*').order('sort_order', { ascending: true })
+    if (error) throw error
+    return data ?? []
+  },
+
+  async savePlan(plan: PlanInput): Promise<void> {
+    if (plan.id) {
+      const { id, ...rest } = plan
+      const { error } = await supabase.from('plans').update(rest).eq('id', id)
+      if (error) throw error
+    } else {
+      const { id: _omit, ...rest } = plan
+      void _omit
+      const { error } = await supabase.from('plans').insert({ ...rest, is_custom: true, sort_order: 200 })
+      if (error) throw error
+    }
+  },
+
+  // ── Subscriptions ─────────────────────────────────────────────────────────
+  async listSubscriptions(): Promise<SubscriptionRow[]> {
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select('*, plan:plans(*), organization:organizations(id, name, slug, logo_url, status)')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []) as unknown as SubscriptionRow[]
+  },
+
+  async listTrials(): Promise<SubscriptionRow[]> {
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select('*, plan:plans(*), organization:organizations(id, name, slug, logo_url, status)')
+      .eq('status', 'trialing')
+      .order('trial_ends_at', { ascending: true })
+    if (error) throw error
+    return (data ?? []) as unknown as SubscriptionRow[]
+  },
+
+  async updateSubscription(
+    id: string,
+    patch: {
+      plan_id?: string
+      status?: SubscriptionStatus
+      billing_cycle?: BillingCycle
+      seats?: number
+      trial_ends_at?: string
+      current_period_end?: string
+    },
+    orgId: string,
+    action: string,
+  ): Promise<void> {
+    const { error } = await supabase.from('subscriptions').update(patch).eq('id', id)
+    if (error) throw error
+    // Keep organization status in sync with subscription lifecycle.
+    if (patch.status === 'active') await supabase.from('organizations').update({ status: 'active' }).eq('id', orgId)
+    if (patch.status === 'cancelled') await supabase.from('organizations').update({ status: 'cancelled' }).eq('id', orgId)
+    await supabase.rpc('log_audit', {
+      p_org: orgId,
+      p_action: `subscription.${action}`,
+      p_entity_type: 'subscription',
+      p_entity_id: id,
+      p_summary: `Subscription ${action}`,
+    })
+  },
+}

@@ -1,0 +1,97 @@
+import { format } from 'date-fns'
+import { Info } from 'lucide-react'
+import { useAllMembers } from '@/features/platform/hooks/use-platform'
+import { PageHeader } from '@/shared/components/page-header'
+import { Card } from '@/shared/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table'
+import { Badge, type BadgeProps } from '@/shared/components/ui/badge'
+import { Skeleton } from '@/shared/components/ui/skeleton'
+import { initialsOf } from '@/shared/lib/format'
+
+const STATUS: Record<string, BadgeProps['variant']> = {
+  active: 'success',
+  invited: 'warning',
+  suspended: 'destructive',
+  disabled: 'muted',
+}
+
+export function OrganizationUsersPage() {
+  const { data, isLoading } = useAllMembers()
+
+  return (
+    <div>
+      <PageHeader title="Organization Users" description="Every user across all customer firms — read only." />
+
+      <div className="mb-5 flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <p className="text-muted-foreground">
+          This is a platform oversight directory. <span className="font-medium text-foreground">Firm users are created
+          by each organization's own admin</span> inside their workspace (Firm Settings) — the platform never creates or
+          edits a firm's users directly. Use Support Mode if you need to act inside a firm.
+        </p>
+      </div>
+
+      <Card className="overflow-hidden">
+        {isLoading ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : data && data.length > 0 ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Organization</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last active</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary/12 text-[10px] font-semibold text-primary">
+                        {m.user?.avatar_url ? (
+                          <img src={m.user.avatar_url} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          initialsOf(m.user?.full_name ?? m.user?.email, 'U')
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{m.user?.full_name ?? '—'}</p>
+                        <p className="truncate text-xs text-muted-foreground">{m.user?.email}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">{m.organization?.name ?? '—'}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline">{m.role?.name ?? '—'}</Badge>
+                      {m.is_owner && <Badge variant="secondary">Owner</Badge>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS[m.status] ?? 'muted'} className="capitalize">
+                      {m.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {m.user?.last_seen_at ? format(new Date(m.user.last_seen_at), 'MMM d, yyyy') : 'Never'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <div className="px-6 py-16 text-center text-sm text-muted-foreground">
+            No users yet. They appear here once organizations start adding their team.
+          </div>
+        )}
+      </Card>
+    </div>
+  )
+}

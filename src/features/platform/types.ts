@@ -1,0 +1,63 @@
+import type { MembershipStatus, Organization, Plan, Subscription } from '@/shared/types/database.types'
+
+export interface MemberDirectoryRow {
+  id: string
+  status: MembershipStatus
+  is_owner: boolean
+  title: string | null
+  created_at: string
+  user: { id: string; full_name: string | null; email: string; avatar_url: string | null; last_seen_at: string | null } | null
+  organization: { id: string; name: string; slug: string } | null
+  role: { id: string; name: string; key: string | null } | null
+}
+
+export interface SubscriptionWithPlan extends Subscription {
+  plan: Plan | null
+}
+
+export interface OrgRow extends Organization {
+  member_count: number
+  subscription: SubscriptionWithPlan | null
+}
+
+export interface SubscriptionRow extends Subscription {
+  plan: Plan | null
+  organization: Pick<Organization, 'id' | 'name' | 'slug' | 'logo_url' | 'status'> | null
+}
+
+export interface PlatformStats {
+  totalOrganizations: number
+  paidOrganizations: number
+  trialOrganizations: number
+  suspendedOrganizations: number
+  totalUsers: number
+  platformUsers: number
+  organizationsThisMonth: number
+  auditEvents: number
+  signedInToday: number
+  mrr: number
+  arr: number
+}
+
+export interface GrowthPoint {
+  label: string
+  value: number
+}
+
+/** Canonical plan feature flags (used by the Plans editor). */
+export const PLAN_FEATURES: { key: string; label: string }[] = [
+  { key: 'case_management', label: 'Case Management' },
+  { key: 'calendar', label: 'Calendar' },
+  { key: 'tasks', label: 'Tasks' },
+  { key: 'reports_basic', label: 'Basic Reports' },
+  { key: 'reports_advanced', label: 'Advanced Reports' },
+  { key: 'billing', label: 'Billing' },
+  { key: 'invoices', label: 'Invoices' },
+  { key: 'document_versioning', label: 'Document Versioning' },
+  { key: 'ai_features', label: 'AI Features' },
+  { key: 'custom_branding', label: 'Custom Branding' },
+  { key: 'sso', label: 'SSO' },
+  { key: 'audit_logs', label: 'Audit Logs' },
+  { key: 'api_access', label: 'API Access' },
+  { key: 'advanced_security', label: 'Advanced Security' },
+]

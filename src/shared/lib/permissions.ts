@@ -1,0 +1,76 @@
+import type { RoleKey } from '@/shared/types/database.types'
+
+/**
+ * The permission engine's vocabulary. Keys mirror the `permissions` catalog
+ * seeded in migration 0003 (resource.action). Keeping them as a const tuple
+ * gives us a compile-time union (`PermissionKey`) used by guards and hooks.
+ */
+export const PERMISSION_KEYS = [
+  'dashboard.view',
+  'organization.view',
+  'organization.manage',
+  'offices.view',
+  'offices.manage',
+  'practice_areas.view',
+  'practice_areas.manage',
+  'departments.view',
+  'departments.manage',
+  'roles.view',
+  'roles.manage',
+  'members.view',
+  'members.manage',
+  'audit.read',
+  'settings.manage',
+  'staff.view',
+  'staff.manage',
+  'clients.view',
+  'clients.create',
+  'clients.update',
+  'clients.delete',
+  'matters.view',
+  'matters.create',
+  'matters.update',
+  'matters.delete',
+  'matters.assign',
+  'documents.view',
+  'documents.upload',
+  'documents.update',
+  'documents.delete',
+  'documents.manage',
+  'hearings.view',
+  'hearings.create',
+  'hearings.update',
+  'hearings.delete',
+  'calendar.view',
+  'tasks.view',
+  'tasks.create',
+  'tasks.update',
+  'tasks.delete',
+  'tasks.assign',
+  'billing.view',
+  'invoices.manage',
+  'payments.manage',
+  'expenses.manage',
+  'trust.manage',
+  'reports.view',
+  'reports.financial',
+  'notifications.view',
+] as const
+
+export type PermissionKey = (typeof PERMISSION_KEYS)[number]
+
+/** Presentation metadata for each canonical role. */
+export const ROLE_META: Record<RoleKey, { label: string; rank: number; group: string }> = {
+  platform_owner: { label: 'Platform Owner', rank: 0, group: 'Platform' },
+  platform_admin: { label: 'Platform Administrator', rank: 5, group: 'Platform' },
+  managing_partner: { label: 'Managing Partner', rank: 10, group: 'Leadership' },
+  partner: { label: 'Partner', rank: 20, group: 'Leadership' },
+  senior_associate: { label: 'Senior Associate', rank: 30, group: 'Fee Earners' },
+  associate: { label: 'Associate', rank: 40, group: 'Fee Earners' },
+  junior_associate: { label: 'Junior Associate', rank: 50, group: 'Fee Earners' },
+  paralegal: { label: 'Paralegal', rank: 60, group: 'Support' },
+  finance: { label: 'Finance', rank: 65, group: 'Operations' },
+  hr: { label: 'HR', rank: 66, group: 'Operations' },
+  secretary: { label: 'Secretary', rank: 70, group: 'Support' },
+  receptionist: { label: 'Receptionist', rank: 80, group: 'Support' },
+}
