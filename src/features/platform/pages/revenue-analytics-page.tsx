@@ -2,7 +2,7 @@ import { TrendingUp, CircleDollarSign, Wallet, Users2, AlertTriangle, LineChart 
 import { useRevenueAnalytics } from '@/features/platform/hooks/use-platform'
 import { KpiCard } from '@/features/platform/components/kpi-card'
 import { GrowthChart } from '@/features/platform/components/growth-chart'
-import { BarChart, DistributionBars } from '@/features/platform/components/bar-chart'
+import { BarChart, DistributionBars } from '@/shared/components/bar-chart'
 import { PageHeader } from '@/shared/components/page-header'
 import { Card } from '@/shared/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table'

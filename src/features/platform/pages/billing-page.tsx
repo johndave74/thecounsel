@@ -3,7 +3,7 @@ import { Banknote, CircleDollarSign, CreditCard, AlertTriangle, Hourglass, Walle
 import { useSubscriptions, usePlatformStats } from '@/features/platform/hooks/use-platform'
 import type { SubscriptionRow } from '@/features/platform/types'
 import { KpiCard } from '@/features/platform/components/kpi-card'
-import { DistributionBars } from '@/features/platform/components/bar-chart'
+import { DistributionBars } from '@/shared/components/bar-chart'
 import { PageHeader } from '@/shared/components/page-header'
 import { Card } from '@/shared/components/ui/card'
 import { Badge } from '@/shared/components/ui/badge'
