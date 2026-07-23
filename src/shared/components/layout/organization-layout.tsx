@@ -4,14 +4,15 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from '@/shared/components/layout/sidebar'
 import { Topbar } from '@/shared/components/layout/topbar'
 import { NoOrganizationState } from '@/shared/components/layout/no-organization-state'
+import { SupportModeBanner } from '@/shared/components/layout/support-mode-banner'
 import { useAuth } from '@/features/auth/context/auth-provider'
 
 /** Law-firm workspace shell. Scoped entirely to the signed-in user's firm. */
 export function OrganizationLayout() {
   const [mobileOpen, setMobileOpen] = React.useState(false)
-  const { memberships, activeOrgId } = useAuth()
+  const { memberships, activeOrgId, supportOrgId } = useAuth()
 
-  const hasWorkspace = memberships.length > 0 && Boolean(activeOrgId)
+  const hasWorkspace = (memberships.length > 0 || Boolean(supportOrgId)) && Boolean(activeOrgId)
 
   return (
     <div className="flex h-full min-h-screen bg-background">
@@ -43,6 +44,7 @@ export function OrganizationLayout() {
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <SupportModeBanner />
         <Topbar onOpenSidebar={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">

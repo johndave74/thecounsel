@@ -249,6 +249,17 @@ export const platformService = {
     return (data ?? []) as unknown as MemberDirectoryRow[]
   },
 
+  async startSupportSession(orgId: string, reason: string): Promise<{ id: string; expires_at: string }> {
+    const { data, error } = await supabase.rpc('start_support_session', { p_org: orgId, p_reason: reason })
+    if (error) throw error
+    return data as { id: string; expires_at: string }
+  },
+
+  async endSupportSession(sessionId: string): Promise<void> {
+    const { error } = await supabase.rpc('end_support_session', { p_id: sessionId })
+    if (error) throw error
+  },
+
   async getRecentActivity(limit = 12): Promise<AuditLog[]> {
     const { data, error } = await supabase
       .from('audit_logs')

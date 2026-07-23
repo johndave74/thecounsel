@@ -1,10 +1,22 @@
 import { supabase } from '@/shared/lib/supabase'
-import type { Organization, Role } from '@/shared/types/database.types'
+import type { Organization, Plan, Role, Subscription } from '@/shared/types/database.types'
 import type {
   InvitationWithRelations,
   MemberWithRelations,
   OrganizationSummary,
 } from '@/features/administration/types'
+
+export interface RoleWithPermissions {
+  id: string
+  name: string
+  key: string | null
+  description: string | null
+  rank: number
+  permissions: { key: string; category: string; action: string; description: string | null }[]
+}
+export interface SubscriptionWithPlan extends Subscription {
+  plan: Plan | null
+}
 
 export const administrationService = {
   /** Platform: every organization (RLS lets platform admins see all). */
@@ -47,6 +59,63 @@ export const administrationService = {
       .order('rank', { ascending: true })
     if (error) throw error
     return data ?? []
+  },
+
+  async updateOrganization(
+    id: string,
+    patch: Partial<Pick<Organization, 'name' | 'legal_name' | 'industry' | 'website' | 'phone' | 'billing_email' | 'timezone' | 'logo_url'>>,
+  ): Promise<void> {
+    const { error } = await supabase.from('organizations').update(patch).eq('id', id)
+    if (error) throw error
+    await supabase.rpc('log_audit', {
+      p_org: id,
+      p_action: 'organization.updated',
+      p_entity_type: 'organization',
+      p_entity_id: id,
+      p_summary: 'Firm profile updated',
+    })
+  },
+
+  async uploadOrganizationLogo(organizationId: string, file: File): Promise<string> {
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase()
+    const path = `${organizationId}/logo-${crypto.randomUUID()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('org-logos').upload(path, file, { upsert: true, contentType: file.type || 'image/png' })
+    if (upErr) throw upErr
+    const url = supabase.storage.from('org-logos').getPublicUrl(path).data.publicUrl
+    await this.updateOrganization(organizationId, { logo_url: url })
+    return url
+  },
+
+  async getSubscription(organizationId: string): Promise<SubscriptionWithPlan | null> {
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select('*, plan:plans(*)')
+      .eq('organization_id', organizationId)
+      .maybeSingle()
+    if (error) throw error
+    return (data ?? null) as unknown as SubscriptionWithPlan | null
+  },
+
+  async listRolesWithPermissions(): Promise<RoleWithPermissions[]> {
+    const { data, error } = await supabase
+      .from('roles')
+      .select('id, name, key, description, rank, role_permissions(permission:permissions(key, category, action, description))')
+      .eq('is_system', true)
+      .gte('rank', 10)
+      .order('rank', { ascending: true })
+    if (error) throw error
+    type Row = {
+      id: string; name: string; key: string | null; description: string | null; rank: number
+      role_permissions: { permission: { key: string; category: string; action: string; description: string | null } | null }[]
+    }
+    return ((data ?? []) as unknown as Row[]).map((r) => ({
+      id: r.id,
+      name: r.name,
+      key: r.key,
+      description: r.description,
+      rank: r.rank,
+      permissions: r.role_permissions.map((rp) => rp.permission).filter(Boolean) as RoleWithPermissions['permissions'],
+    }))
   },
 
   async removeMember(membershipId: string, organizationId: string, name: string): Promise<void> {

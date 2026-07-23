@@ -22,6 +22,8 @@ export interface AuthState {
   /** Permission keys granted in the active organization. */
   permissions: Set<PermissionKey>
   isPlatformAdmin: boolean
+  /** Set when a platform admin is inside a firm via Support Mode. */
+  supportOrgId: string | null
   status: 'loading' | 'authenticated' | 'unauthenticated'
 }
 
@@ -31,6 +33,10 @@ export interface AuthContextValue extends AuthState {
   sendPasswordReset: (email: string) => Promise<void>
   updatePassword: (newPassword: string) => Promise<void>
   setActiveOrg: (orgId: string) => void
+  /** Enter a firm's workspace in Support Mode (platform staff only). */
+  startSupport: (orgId: string) => Promise<void>
+  /** Leave Support Mode and return to the platform console. */
+  exitSupport: () => Promise<void>
   refresh: () => Promise<void>
   has: (permission: PermissionKey) => boolean
   hasAny: (permissions: PermissionKey[]) => boolean

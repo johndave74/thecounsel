@@ -73,6 +73,38 @@ export function useRevokeInvitation(organizationId: string) {
   })
 }
 
+export function useSubscription(organizationId: string | null) {
+  return useQuery({
+    queryKey: ['administration', 'subscription', organizationId ?? 'none'],
+    enabled: Boolean(organizationId),
+    queryFn: () => administrationService.getSubscription(organizationId!),
+  })
+}
+
+export function useRolesWithPermissions() {
+  return useQuery({
+    queryKey: ['administration', 'roles-permissions'],
+    queryFn: () => administrationService.listRolesWithPermissions(),
+  })
+}
+
+export function useUpdateOrganization(organizationId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: Parameters<typeof administrationService.updateOrganization>[1]) =>
+      administrationService.updateOrganization(organizationId!, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['administration'] }),
+  })
+}
+
+export function useUploadOrganizationLogo(organizationId: string | null) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => administrationService.uploadOrganizationLogo(organizationId!, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['administration'] }),
+  })
+}
+
 export function useRemoveMember(organizationId: string | null) {
   const qc = useQueryClient()
   return useMutation({

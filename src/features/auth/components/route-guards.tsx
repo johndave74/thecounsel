@@ -32,10 +32,10 @@ export function RequirePlatform() {
   return <Outlet />
 }
 
-/** Law-firm workspace — non-platform users. Platform admins are sent to the console. */
+/** Law-firm workspace — non-platform users, or platform staff in Support Mode. */
 export function RequireOrganization() {
-  const { isPlatformAdmin } = useAuth()
-  if (isPlatformAdmin) return <Navigate to="/platform" replace />
+  const { isPlatformAdmin, supportOrgId } = useAuth()
+  if (isPlatformAdmin && !supportOrgId) return <Navigate to="/platform" replace />
   return <Outlet />
 }
 

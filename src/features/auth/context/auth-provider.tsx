@@ -3,8 +3,10 @@ import { supabase } from '@/shared/lib/supabase'
 import { PERMISSION_KEYS, type PermissionKey } from '@/shared/lib/permissions'
 import { authService } from '@/features/auth/services/auth.service'
 import type { ActiveMembership, AuthContextValue, AuthState } from '@/features/auth/types'
+import type { Organization } from '@/shared/types/database.types'
 
 const ACTIVE_ORG_KEY = 'counsel.active_org'
+const SUPPORT_KEY = 'counsel.support_org'
 
 const initialState: AuthState = {
   userId: null,
@@ -14,7 +16,38 @@ const initialState: AuthState = {
   activeMembership: null,
   permissions: new Set<PermissionKey>(),
   isPlatformAdmin: false,
+  supportOrgId: null,
   status: 'loading',
+}
+
+/** Synthetic membership so a platform admin renders inside a firm during Support Mode. */
+function supportMembership(userId: string, org: Organization): ActiveMembership {
+  return {
+    id: 'support-session',
+    organization_id: org.id,
+    user_id: userId,
+    role_id: 'support',
+    status: 'active',
+    is_owner: false,
+    title: 'Platform Support',
+    invited_by: null,
+    invited_at: null,
+    joined_at: null,
+    created_at: '',
+    updated_at: '',
+    role: {
+      id: 'support',
+      organization_id: null,
+      key: null,
+      name: 'Support Session',
+      description: null,
+      rank: 0,
+      is_system: true,
+      created_at: '',
+      updated_at: '',
+    },
+    organization: org,
+  } as unknown as ActiveMembership
 }
 
 const AuthContext = React.createContext<AuthContextValue | null>(null)
@@ -45,6 +78,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ])
 
     const isPlatformAdmin = Boolean(profile?.is_platform_admin)
+
+    // Support Mode: a platform admin operating inside a firm's workspace.
+    const supportOrgId = isPlatformAdmin ? sessionStorage.getItem(SUPPORT_KEY) : null
+    if (supportOrgId) {
+      const { data: org } = await supabase.from('organizations').select('*').eq('id', supportOrgId).single()
+      if (org) {
+        setState({
+          userId,
+          profile,
+          memberships,
+          activeOrgId: supportOrgId,
+          activeMembership: supportMembership(userId, org as Organization),
+          permissions: new Set(PERMISSION_KEYS),
+          isPlatformAdmin,
+          supportOrgId,
+          status: 'authenticated',
+        })
+        void authService.touchLastSeen(userId)
+        return
+      }
+      sessionStorage.removeItem(SUPPORT_KEY) // org vanished — drop support mode
+    }
+
     const stored = localStorage.getItem(ACTIVE_ORG_KEY)
     const activeOrgId = pickActiveOrg(memberships, stored, profile?.default_organization_id ?? null)
     const activeMembership = memberships.find((m) => m.organization_id === activeOrgId) ?? null
@@ -68,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       activeMembership,
       permissions,
       isPlatformAdmin,
+      supportOrgId: null,
       status: 'authenticated',
     })
 
@@ -136,6 +193,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sendPasswordReset: (email) => authService.sendPasswordReset(email),
       updatePassword: (pwd) => authService.updatePassword(pwd),
       setActiveOrg,
+      startSupport: async (orgId: string) => {
+        sessionStorage.setItem(SUPPORT_KEY, orgId)
+        await load(state.userId)
+      },
+      exitSupport: async () => {
+        sessionStorage.removeItem(SUPPORT_KEY)
+        sessionStorage.removeItem('counsel.support_expires')
+        sessionStorage.removeItem('counsel.support_session')
+        await load(state.userId)
+      },
       refresh: () => load(state.userId),
       has,
       hasAny,

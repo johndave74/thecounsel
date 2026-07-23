@@ -501,6 +501,30 @@ export interface Database {
           },
         ]
       }
+      support_sessions: {
+        Row: {
+          id: string
+          organization_id: string
+          admin_id: string | null
+          reason: string | null
+          started_at: string
+          expires_at: string
+          ended_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          admin_id?: string | null
+          reason?: string | null
+          started_at?: string
+          expires_at: string
+          ended_at?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['support_sessions']['Insert']>
+        Relationships: []
+      }
       staff_profiles: {
         Row: {
           organization_id: string
@@ -915,6 +939,11 @@ export interface Database {
       soft_delete_organization: { Args: { p_org: string }; Returns: undefined }
       restore_organization: { Args: { p_org: string }; Returns: undefined }
       hard_delete_organization: { Args: { p_org: string }; Returns: undefined }
+      start_support_session: {
+        Args: { p_org: string; p_reason: string }
+        Returns: Database['public']['Tables']['support_sessions']['Row']
+      }
+      end_support_session: { Args: { p_id: string }; Returns: undefined }
     }
     Enums: {
       org_status: OrgStatus

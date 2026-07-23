@@ -26,6 +26,7 @@ import {
 import { CreateOrganizationDialog } from '@/features/platform/components/create-organization-dialog'
 import { EditOrganizationDialog } from '@/features/platform/components/edit-organization-dialog'
 import { ViewOrganizationDialog } from '@/features/platform/components/view-organization-dialog'
+import { SupportSessionDialog } from '@/features/platform/components/support-session-dialog'
 import type { OrgRow } from '@/features/platform/types'
 import { PageHeader } from '@/shared/components/page-header'
 import { ConfirmDialog } from '@/shared/components/confirm-dialog'
@@ -66,6 +67,7 @@ function ActiveRowActions({ org }: { org: OrgRow }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false)
   const [viewOpen, setViewOpen] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState(false)
+  const [supportOpen, setSupportOpen] = React.useState(false)
   const suspended = org.status === 'suspended'
   const soon = () => toast.info('Coming soon', { description: 'This action arrives in a later phase.' })
 
@@ -100,7 +102,7 @@ function ActiveRowActions({ org }: { org: OrgRow }) {
           <DropdownMenuItem onClick={() => navigate('/platform/subscriptions')}><CreditCard /> View subscription</DropdownMenuItem>
           <DropdownMenuItem onClick={() => navigate('/platform/billing')}><Receipt /> View billing</DropdownMenuItem>
           <DropdownMenuItem onClick={() => navigate('/platform/audit')}><ScrollText /> Open audit logs</DropdownMenuItem>
-          <DropdownMenuItem onClick={soon}><LifeBuoy /> Start support session</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setSupportOpen(true)}><LifeBuoy /> Start support session</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirmDelete(true)}>
             <Trash2 /> Delete organization
@@ -135,6 +137,7 @@ function ActiveRowActions({ org }: { org: OrgRow }) {
 
       <ViewOrganizationDialog org={org} open={viewOpen} onOpenChange={setViewOpen} />
       <EditOrganizationDialog org={org} open={editOpen} onOpenChange={setEditOpen} />
+      <SupportSessionDialog org={{ id: org.id, name: org.name }} open={supportOpen} onOpenChange={setSupportOpen} />
     </>
   )
 }
