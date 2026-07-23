@@ -103,6 +103,7 @@ export interface Database {
           phone: string | null
           title: string | null
           is_platform_admin: boolean
+          platform_role: string | null
           default_organization_id: string | null
           last_seen_at: string | null
         } & Timestamps
@@ -114,6 +115,7 @@ export interface Database {
           phone?: string | null
           title?: string | null
           is_platform_admin?: boolean
+          platform_role?: string | null
           default_organization_id?: string | null
           last_seen_at?: string | null
         }
@@ -500,6 +502,38 @@ export interface Database {
             referencedColumns: ['id']
           },
         ]
+      }
+      platform_settings: {
+        Row: {
+          id: boolean
+          product_name: string
+          support_email: string | null
+          primary_color: string
+          allow_org_creation: boolean
+          default_trial_days: number
+          maintenance_mode: boolean
+          maintenance_message: string | null
+          global_notice: string | null
+          feature_flags: Json
+          smtp: Json
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          product_name?: string
+          support_email?: string | null
+          primary_color?: string
+          allow_org_creation?: boolean
+          default_trial_days?: number
+          maintenance_mode?: boolean
+          maintenance_message?: string | null
+          global_notice?: string | null
+          feature_flags?: Json
+          smtp?: Json
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['platform_settings']['Insert']>
+        Relationships: []
       }
       support_sessions: {
         Row: {
@@ -944,6 +978,7 @@ export interface Database {
         Returns: Database['public']['Tables']['support_sessions']['Row']
       }
       end_support_session: { Args: { p_id: string }; Returns: undefined }
+      set_platform_access: { Args: { p_user: string; p_role: string; p_is_admin: boolean }; Returns: undefined }
     }
     Enums: {
       org_status: OrgStatus
@@ -967,6 +1002,7 @@ export type Invitation = Database['public']['Tables']['invitations']['Row']
 export type AuditLog = Database['public']['Tables']['audit_logs']['Row']
 export type Plan = Database['public']['Tables']['plans']['Row']
 export type Subscription = Database['public']['Tables']['subscriptions']['Row']
+export type PlatformSettings = Database['public']['Tables']['platform_settings']['Row']
 export type Client = Database['public']['Tables']['clients']['Row']
 export type ClientInsert = Database['public']['Tables']['clients']['Insert']
 export type Matter = Database['public']['Tables']['matters']['Row']

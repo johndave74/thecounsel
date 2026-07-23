@@ -7,6 +7,7 @@ import type {
   OrgStatus,
   Organization,
   Plan,
+  PlatformSettings,
   SubscriptionStatus,
 } from '@/shared/types/database.types'
 
@@ -28,6 +29,7 @@ import type {
   MemberDirectoryRow,
   OrgRow,
   PlatformStats,
+  PlatformUser,
   RevenueAnalytics,
   SubscriptionRow,
   SubscriptionWithPlan,
@@ -247,6 +249,38 @@ export const platformService = {
       .order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []) as unknown as MemberDirectoryRow[]
+  },
+
+  // ── Platform users ─────────────────────────────────────────────────────────
+  async listPlatformUsers(): Promise<PlatformUser[]> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, avatar_url, platform_role, last_seen_at, created_at')
+      .eq('is_platform_admin', true)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return (data ?? []) as unknown as PlatformUser[]
+  },
+
+  async createPlatformUser(input: { email: string; password: string; fullName: string; platformRole: string }): Promise<void> {
+    await adminUsersService.createPlatformUser(input)
+  },
+
+  async setPlatformAccess(userId: string, role: string, isAdmin: boolean): Promise<void> {
+    const { error } = await supabase.rpc('set_platform_access', { p_user: userId, p_role: role, p_is_admin: isAdmin })
+    if (error) throw error
+  },
+
+  // ── Platform settings ───────────────────────────────────────────────────────
+  async getSettings(): Promise<PlatformSettings> {
+    const { data, error } = await supabase.from('platform_settings').select('*').eq('id', true).single()
+    if (error) throw error
+    return data as PlatformSettings
+  },
+
+  async updateSettings(patch: Partial<PlatformSettings>): Promise<void> {
+    const { error } = await supabase.from('platform_settings').update(patch).eq('id', true)
+    if (error) throw error
   },
 
   async startSupportSession(orgId: string, reason: string): Promise<{ id: string; expires_at: string }> {

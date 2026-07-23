@@ -1,4 +1,4 @@
-import { LifeBuoy, Activity, ShieldCheck, Settings2 } from 'lucide-react'
+import { LifeBuoy, Activity } from 'lucide-react'
 import { ModulePlaceholder } from '@/shared/components/module-placeholder'
 
 export const SupportTicketsPage = () => (
@@ -16,23 +16,5 @@ export const SystemHealthPage = () => (
     description="Infrastructure status & performance."
     icon={Activity}
     highlights={['Supabase database', 'Authentication & storage', 'Realtime & edge functions', 'API response times', 'Storage usage', 'Performance metrics']}
-  />
-)
-
-export const PlatformUsersPage = () => (
-  <ModulePlaceholder
-    title="Platform Users"
-    description="CloudTech employees — not law-firm users."
-    icon={ShieldCheck}
-    highlights={['Platform Owner & Administrators', 'Support Engineers', 'Sales & Finance', 'Developers', 'Role-based access', 'Activity & sessions']}
-  />
-)
-
-export const PlatformSettingsPage = () => (
-  <ModulePlaceholder
-    title="Platform Settings"
-    description="Global configuration."
-    icon={Settings2}
-    highlights={['Branding', 'Email templates & SMTP', 'Default plans', 'Feature flags', 'Global notifications', 'Maintenance mode']}
   />
 )

@@ -39,12 +39,9 @@ import { AnalyticsPage } from '@/features/platform/pages/analytics-page'
 import { RevenueAnalyticsPage } from '@/features/platform/pages/revenue-analytics-page'
 import { OrganizationUsersPage } from '@/features/platform/pages/organization-users-page'
 import { AuditLogsPage } from '@/features/platform/pages/audit-logs-page'
-import {
-  SupportTicketsPage,
-  SystemHealthPage,
-  PlatformUsersPage,
-  PlatformSettingsPage,
-} from '@/features/platform/pages/platform-stubs'
+import { PlatformUsersPage } from '@/features/platform/pages/platform-users-page'
+import { PlatformSettingsPage } from '@/features/platform/pages/platform-settings-page'
+import { SupportTicketsPage, SystemHealthPage } from '@/features/platform/pages/platform-stubs'
 
 const withPermission = (
   node: React.ReactNode,

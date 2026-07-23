@@ -59,6 +59,29 @@ export interface RevenueAnalytics {
   forecast: { label: string; value: number }[]
 }
 
+export interface PlatformUser {
+  id: string
+  full_name: string | null
+  email: string
+  avatar_url: string | null
+  platform_role: string | null
+  last_seen_at: string | null
+  created_at: string
+}
+
+export const PLATFORM_ROLES: { key: string; label: string }[] = [
+  { key: 'owner', label: 'Platform Owner' },
+  { key: 'admin', label: 'Administrator' },
+  { key: 'support', label: 'Support Engineer' },
+  { key: 'sales', label: 'Sales' },
+  { key: 'developer', label: 'Developer' },
+  { key: 'finance', label: 'Finance' },
+]
+
+export function platformRoleLabel(key: string | null): string {
+  return PLATFORM_ROLES.find((r) => r.key === key)?.label ?? 'Administrator'
+}
+
 /** Canonical plan feature flags (used by the Plans editor). */
 export const PLAN_FEATURES: { key: string; label: string }[] = [
   { key: 'case_management', label: 'Case Management' },

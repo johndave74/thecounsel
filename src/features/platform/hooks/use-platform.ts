@@ -49,6 +49,35 @@ export function useAllMembers() {
 export function useRevenueAnalytics() {
   return useQuery({ queryKey: ['platform', 'revenue-analytics'], queryFn: () => platformService.getRevenueAnalytics() })
 }
+export function usePlatformUsers() {
+  return useQuery({ queryKey: ['platform', 'platform-users'], queryFn: () => platformService.listPlatformUsers() })
+}
+export function usePlatformSettings() {
+  return useQuery({ queryKey: ['platform', 'settings'], queryFn: () => platformService.getSettings() })
+}
+export function useCreatePlatformUser() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (input: { email: string; password: string; fullName: string; platformRole: string }) =>
+      platformService.createPlatformUser(input),
+    onSuccess: invalidate,
+  })
+}
+export function useSetPlatformAccess() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: ({ userId, role, isAdmin }: { userId: string; role: string; isAdmin: boolean }) =>
+      platformService.setPlatformAccess(userId, role, isAdmin),
+    onSuccess: invalidate,
+  })
+}
+export function useUpdatePlatformSettings() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (patch: Parameters<typeof platformService.updateSettings>[0]) => platformService.updateSettings(patch),
+    onSuccess: invalidate,
+  })
+}
 
 export function useCreateOrganizationWithAdmin() {
   const invalidate = useInvalidateAll()

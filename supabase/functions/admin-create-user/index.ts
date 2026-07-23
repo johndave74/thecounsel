@@ -1,9 +1,9 @@
 // ============================================================================
 // Edge Function: admin-create-user
-// Creates a Supabase auth account on behalf of an admin and seats it in an
-// organization. This is the ONLY way accounts are created (public signup is
-// disabled): Platform Admins create organization admins; organization admins
-// create their firm's users.
+// Creates a Supabase auth account on behalf of an admin. This is the ONLY way
+// accounts are created (public signup is disabled):
+//   • Platform Admins create organization admins and CloudTech platform staff.
+//   • Organization admins create their firm's users.
 //
 // Deploy:  supabase functions deploy admin-create-user
 // (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
@@ -20,9 +20,12 @@ interface Payload {
   email: string
   password: string
   fullName: string
-  organizationId: string
-  roleKey: string
+  organizationId?: string
+  roleKey?: string
   title?: string
+  // Platform staff creation (no organization):
+  platform?: boolean
+  platformRole?: string
 }
 
 function json(body: unknown, status = 200) {
@@ -50,9 +53,12 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Invalid JSON body' }, 400)
   }
 
-  const { email, password, fullName, organizationId, roleKey, title } = body
-  if (!email || !password || !fullName || !organizationId || !roleKey) {
-    return json({ error: 'email, password, fullName, organizationId and roleKey are required' }, 400)
+  const { email, password, fullName, organizationId, roleKey, title, platform, platformRole } = body
+  if (!email || !password || !fullName) {
+    return json({ error: 'email, password and fullName are required' }, 400)
+  }
+  if (!platform && (!organizationId || !roleKey)) {
+    return json({ error: 'organizationId and roleKey are required' }, 400)
   }
   if (password.length < 10) return json({ error: 'Password must be at least 10 characters' }, 400)
 
@@ -64,13 +70,16 @@ Deno.serve(async (req: Request) => {
   const { data: userData, error: userErr } = await caller.auth.getUser()
   if (userErr || !userData.user) return json({ error: 'Not authenticated' }, 401)
 
-  // Authorization: platform admin OR admin of the target organization.
-  const [{ data: isPlatformAdmin }, { data: isOrgAdmin }] = await Promise.all([
-    caller.rpc('is_platform_admin'),
-    caller.rpc('is_org_admin', { org: organizationId }),
-  ])
-  if (!isPlatformAdmin && !isOrgAdmin) {
-    return json({ error: 'You are not allowed to create users in this organization' }, 403)
+  const { data: isPlatformAdmin } = await caller.rpc('is_platform_admin')
+
+  if (platform) {
+    // Only platform staff may create other platform staff.
+    if (!isPlatformAdmin) return json({ error: 'Only platform staff can create platform users' }, 403)
+  } else {
+    const { data: isOrgAdmin } = await caller.rpc('is_org_admin', { org: organizationId })
+    if (!isPlatformAdmin && !isOrgAdmin) {
+      return json({ error: 'You are not allowed to create users in this organization' }, 403)
+    }
   }
 
   // Service-role client — privileged operations.
@@ -78,13 +87,13 @@ Deno.serve(async (req: Request) => {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
-  // Resolve the role id from its key (system roles).
-  const { data: role, error: roleErr } = await admin
-    .from('roles')
-    .select('id, key, rank')
-    .eq('key', roleKey)
-    .maybeSingle()
-  if (roleErr || !role) return json({ error: `Unknown role: ${roleKey}` }, 400)
+  // For firm users, resolve the role id from its key up front.
+  let role: { id: string; key: string } | null = null
+  if (!platform) {
+    const { data, error: roleErr } = await admin.from('roles').select('id, key').eq('key', roleKey).maybeSingle()
+    if (roleErr || !data) return json({ error: `Unknown role: ${roleKey}` }, 400)
+    role = data
+  }
 
   // Create (or fetch existing) auth user.
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -96,20 +105,29 @@ Deno.serve(async (req: Request) => {
 
   let userId = created?.user?.id
   if (createErr || !userId) {
-    // If the user already exists, look them up so we can still seat them.
     const { data: list } = await admin.auth.admin.listUsers()
     const existing = list?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
     if (!existing) return json({ error: createErr?.message ?? 'Could not create user' }, 400)
     userId = existing.id
   }
 
-  // Seat the user in the organization.
-  const isOwnerRole = role.key === 'managing_partner'
+  if (platform) {
+    // CloudTech platform staff — no organization membership.
+    const { error } = await admin
+      .from('profiles')
+      .update({ full_name: fullName, is_platform_admin: true, platform_role: platformRole ?? 'support' })
+      .eq('id', userId)
+    if (error) return json({ error: error.message }, 400)
+    return json({ userId, email }, 201)
+  }
+
+  // Firm user — seat in the organization.
+  const isOwnerRole = role!.key === 'managing_partner'
   const { error: memErr } = await admin.from('memberships').upsert(
     {
       organization_id: organizationId,
       user_id: userId,
-      role_id: role.id,
+      role_id: role!.id,
       status: 'active',
       is_owner: isOwnerRole,
       title: title ?? null,
@@ -124,7 +142,7 @@ Deno.serve(async (req: Request) => {
     p_org: organizationId,
     p_action: 'user.created',
     p_entity_type: 'membership',
-    p_summary: `Created ${email} as ${role.key}`,
+    p_summary: `Created ${email} as ${role!.key}`,
   })
 
   return json({ userId, email }, 201)
