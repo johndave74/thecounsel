@@ -28,6 +28,7 @@ import type {
   MemberDirectoryRow,
   OrgRow,
   PlatformStats,
+  RevenueAnalytics,
   SubscriptionRow,
   SubscriptionWithPlan,
 } from '@/features/platform/types'
@@ -280,6 +281,102 @@ export const platformService = {
     }
     let running = 0
     return buckets.map((b) => ({ label: b.label, value: (running += b.value) }))
+  },
+
+  async getRevenueAnalytics(months = 6): Promise<RevenueAnalytics> {
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select(
+        'status, billing_cycle, created_at, cancelled_at, plan:plans(name, price_monthly, price_yearly), organization:organizations(id, name)',
+      )
+    if (error) throw error
+
+    type Row = {
+      status: SubscriptionStatus
+      billing_cycle: BillingCycle
+      created_at: string
+      cancelled_at: string | null
+      plan: { name: string; price_monthly: number; price_yearly: number } | null
+      organization: { id: string; name: string } | null
+    }
+    const subs = (data ?? []) as unknown as Row[]
+    const mv = (s: Row) =>
+      !s.plan ? 0 : s.billing_cycle === 'yearly' ? Number(s.plan.price_yearly) / 12 : Number(s.plan.price_monthly)
+
+    const active = subs.filter((s) => s.status === 'active')
+    const mrr = active.reduce((sum, s) => sum + mv(s), 0)
+    const payingCustomers = active.length
+    const arpa = payingCustomers ? mrr / payingCustomers : 0
+    const atRisk = subs.filter((s) => s.status === 'past_due').reduce((sum, s) => sum + mv(s), 0)
+
+    // Month buckets for the trailing window.
+    const start = new Date()
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+    start.setMonth(start.getMonth() - (months - 1))
+    const fmt = new Intl.DateTimeFormat('en', { month: 'short' })
+    const monthIndex = (iso: string) => {
+      const d = new Date(iso)
+      return (d.getFullYear() - start.getFullYear()) * 12 + d.getMonth() - start.getMonth()
+    }
+    const movement = Array.from({ length: months }, (_, i) => {
+      const d = new Date(start)
+      d.setMonth(start.getMonth() + i)
+      return { label: fmt.format(d), newMrr: 0, churnedMrr: 0, netMrr: 0 }
+    })
+    for (const s of subs) {
+      if (s.status === 'active') {
+        const idx = monthIndex(s.created_at)
+        if (idx >= 0 && idx < months) movement[idx].newMrr += mv(s)
+      }
+      if (s.status === 'cancelled' && s.cancelled_at) {
+        const idx = monthIndex(s.cancelled_at)
+        if (idx >= 0 && idx < months) movement[idx].churnedMrr += mv(s)
+      }
+    }
+    movement.forEach((m) => (m.netMrr = m.newMrr - m.churnedMrr))
+
+    // Reconstruct the cumulative MRR trend so the last point equals current MRR.
+    const windowNet = movement.reduce((sum, m) => sum + m.netMrr, 0)
+    let running = Math.max(0, mrr - windowNet)
+    const trend: GrowthPoint[] = movement.map((m) => {
+      running += m.netMrr
+      return { label: m.label, value: Math.max(0, Math.round(running)) }
+    })
+
+    // By plan.
+    const planMap = new Map<string, { label: string; value: number; customers: number }>()
+    for (const s of active) {
+      const name = s.plan?.name ?? 'Unassigned'
+      const e = planMap.get(name) ?? { label: name, value: 0, customers: 0 }
+      e.value += mv(s)
+      e.customers += 1
+      planMap.set(name, e)
+    }
+    const byPlan = [...planMap.values()].sort((a, b) => b.value - a.value)
+
+    const byCycle = [
+      { label: 'Monthly', value: active.filter((s) => s.billing_cycle === 'monthly').reduce((sum, s) => sum + mv(s), 0) },
+      { label: 'Yearly', value: active.filter((s) => s.billing_cycle === 'yearly').reduce((sum, s) => sum + mv(s), 0) },
+    ]
+
+    const topCustomers = [...active]
+      .map((s) => ({ id: s.organization?.id ?? '', name: s.organization?.name ?? '—', plan: s.plan?.name ?? '—', mrr: mv(s) }))
+      .sort((a, b) => b.mrr - a.mrr)
+      .slice(0, 6)
+
+    // Simple linear forecast from the average monthly net-new over the window.
+    const avgNet = windowNet / months
+    const forecast = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date()
+      d.setDate(1)
+      d.setMonth(d.getMonth() + i + 1)
+      return { label: fmt.format(d), value: Math.max(0, Math.round(mrr + avgNet * (i + 1))) }
+    })
+
+    const projectedArr = Math.max(0, Math.round(mrr + avgNet * 6)) * 12
+
+    return { mrr, arr: mrr * 12, arpa, payingCustomers, atRisk, projectedArr, trend, movement, byPlan, byCycle, topCustomers, forecast }
   },
 
   // ── Plans ────────────────────────────────────────────────────────────────

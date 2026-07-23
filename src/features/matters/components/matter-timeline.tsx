@@ -10,6 +10,7 @@ import {
   Gavel,
   ListChecks,
   CheckCheck,
+  Receipt,
   Check,
   Trophy,
   X,
@@ -35,6 +36,7 @@ const EVENT_ICON: Record<string, LucideIcon> = {
   hearing_scheduled: Gavel,
   task_added: ListChecks,
   task_completed: CheckCheck,
+  invoice_created: Receipt,
   update: PencilLine,
 }
 

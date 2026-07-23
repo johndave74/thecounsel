@@ -16,7 +16,8 @@ import { AcceptInvitePage } from '@/features/auth/pages/accept-invite-page'
 // Organization (law firm) workspace
 import { DashboardPage } from '@/features/dashboard/pages/dashboard-page'
 import { AdministrationPage } from '@/features/administration/pages/administration-page'
-import { BillingPage, ReportsPage, SettingsPage } from '@/app/placeholder-pages'
+import { ReportsPage, SettingsPage } from '@/app/placeholder-pages'
+import { BillingPage } from '@/features/billing/pages/billing-page'
 import { ClientsPage } from '@/features/clients/pages/clients-page'
 import { NotificationsPage } from '@/features/notifications/pages/notifications-page'
 import { MattersPage } from '@/features/matters/pages/matters-page'
@@ -34,10 +35,10 @@ import { SubscriptionsPage } from '@/features/platform/pages/subscriptions-page'
 import { PlansPage } from '@/features/platform/pages/plans-page'
 import { BillingPage as PlatformBillingPage } from '@/features/platform/pages/billing-page'
 import { AnalyticsPage } from '@/features/platform/pages/analytics-page'
+import { RevenueAnalyticsPage } from '@/features/platform/pages/revenue-analytics-page'
 import { OrganizationUsersPage } from '@/features/platform/pages/organization-users-page'
 import { AuditLogsPage } from '@/features/platform/pages/audit-logs-page'
 import {
-  RevenueAnalyticsPage,
   SupportTicketsPage,
   SystemHealthPage,
   PlatformUsersPage,

@@ -44,6 +44,21 @@ export interface GrowthPoint {
   value: number
 }
 
+export interface RevenueAnalytics {
+  mrr: number
+  arr: number
+  arpa: number
+  payingCustomers: number
+  atRisk: number
+  projectedArr: number
+  trend: GrowthPoint[]
+  movement: { label: string; newMrr: number; churnedMrr: number; netMrr: number }[]
+  byPlan: { label: string; value: number; customers: number }[]
+  byCycle: { label: string; value: number }[]
+  topCustomers: { id: string; name: string; plan: string; mrr: number }[]
+  forecast: { label: string; value: number }[]
+}
+
 /** Canonical plan feature flags (used by the Plans editor). */
 export const PLAN_FEATURES: { key: string; label: string }[] = [
   { key: 'case_management', label: 'Case Management' },

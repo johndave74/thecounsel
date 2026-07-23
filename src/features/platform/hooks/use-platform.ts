@@ -46,6 +46,9 @@ export function useTrials() {
 export function useAllMembers() {
   return useQuery({ queryKey: keys.members, queryFn: () => platformService.listAllMembers() })
 }
+export function useRevenueAnalytics() {
+  return useQuery({ queryKey: ['platform', 'revenue-analytics'], queryFn: () => platformService.getRevenueAnalytics() })
+}
 
 export function useCreateOrganizationWithAdmin() {
   const invalidate = useInvalidateAll()

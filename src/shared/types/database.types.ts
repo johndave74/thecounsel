@@ -27,6 +27,7 @@ export type HearingType = 'mention' | 'hearing' | 'trial' | 'ruling' | 'motion' 
 export type HearingStatus = 'scheduled' | 'adjourned' | 'held' | 'cancelled'
 export type TaskStatus = 'todo' | 'in_progress' | 'done'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'void'
 export type RoleKey =
   | 'platform_owner'
   | 'platform_admin'
@@ -642,6 +643,187 @@ export interface Database {
           },
         ]
       }
+      time_entries: {
+        Row: {
+          id: string
+          organization_id: string
+          matter_id: string | null
+          user_id: string | null
+          work_date: string
+          minutes: number
+          rate: number
+          description: string
+          billable: boolean
+          invoiced: boolean
+          invoice_id: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          organization_id: string
+          matter_id?: string | null
+          user_id?: string | null
+          work_date?: string
+          minutes: number
+          rate?: number
+          description: string
+          billable?: boolean
+          invoiced?: boolean
+          invoice_id?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['time_entries']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'time_entries_matter_id_fkey'
+            columns: ['matter_id']
+            isOneToOne: false
+            referencedRelation: 'matters'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          id: string
+          organization_id: string
+          matter_id: string | null
+          user_id: string | null
+          expense_date: string
+          amount: number
+          description: string
+          category: string | null
+          billable: boolean
+          invoiced: boolean
+          invoice_id: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          organization_id: string
+          matter_id?: string | null
+          user_id?: string | null
+          expense_date?: string
+          amount: number
+          description: string
+          category?: string | null
+          billable?: boolean
+          invoiced?: boolean
+          invoice_id?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['expenses']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'expenses_matter_id_fkey'
+            columns: ['matter_id']
+            isOneToOne: false
+            referencedRelation: 'matters'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          id: string
+          organization_id: string
+          invoice_number: string | null
+          client_id: string | null
+          matter_id: string | null
+          status: InvoiceStatus
+          issue_date: string
+          due_date: string | null
+          subtotal: number
+          tax: number
+          total: number
+          amount_paid: number
+          notes: string | null
+          created_by: string | null
+        } & Timestamps
+        Insert: {
+          id?: string
+          organization_id: string
+          invoice_number?: string | null
+          client_id?: string | null
+          matter_id?: string | null
+          status?: InvoiceStatus
+          issue_date?: string
+          due_date?: string | null
+          subtotal?: number
+          tax?: number
+          total?: number
+          amount_paid?: number
+          notes?: string | null
+          created_by?: string | null
+        }
+        Update: Partial<Database['public']['Tables']['invoices']['Insert']>
+        Relationships: [
+          {
+            foreignKeyName: 'invoices_client_id_fkey'
+            columns: ['client_id']
+            isOneToOne: false
+            referencedRelation: 'clients'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'invoices_matter_id_fkey'
+            columns: ['matter_id']
+            isOneToOne: false
+            referencedRelation: 'matters'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      invoice_items: {
+        Row: {
+          id: string
+          organization_id: string
+          invoice_id: string
+          kind: string
+          description: string
+          quantity: number
+          unit: string | null
+          rate: number
+          amount: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          invoice_id: string
+          kind?: string
+          description: string
+          quantity?: number
+          unit?: string | null
+          rate?: number
+          amount?: number
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['invoice_items']['Insert']>
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          id: string
+          organization_id: string
+          invoice_id: string
+          amount: number
+          method: string | null
+          reference: string | null
+          paid_at: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          invoice_id: string
+          amount: number
+          method?: string | null
+          reference?: string | null
+          paid_at?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['payments']['Insert']>
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           id: string
@@ -720,6 +902,16 @@ export interface Database {
         Returns: Database['public']['Tables']['audit_logs']['Row']
       }
       set_avatar: { Args: { p_user: string; p_url: string }; Returns: undefined }
+      generate_invoice: {
+        Args: {
+          p_org: string
+          p_client: string
+          p_matter?: string | null
+          p_due_date?: string | null
+          p_tax_rate?: number
+        }
+        Returns: Database['public']['Tables']['invoices']['Row']
+      }
       soft_delete_organization: { Args: { p_org: string }; Returns: undefined }
       restore_organization: { Args: { p_org: string }; Returns: undefined }
       hard_delete_organization: { Args: { p_org: string }; Returns: undefined }
@@ -754,4 +946,9 @@ export type MatterEvent = Database['public']['Tables']['matter_events']['Row']
 export type Hearing = Database['public']['Tables']['hearings']['Row']
 export type Task = Database['public']['Tables']['tasks']['Row']
 export type StaffProfile = Database['public']['Tables']['staff_profiles']['Row']
+export type TimeEntry = Database['public']['Tables']['time_entries']['Row']
+export type Expense = Database['public']['Tables']['expenses']['Row']
+export type Invoice = Database['public']['Tables']['invoices']['Row']
+export type InvoiceItem = Database['public']['Tables']['invoice_items']['Row']
+export type Payment = Database['public']['Tables']['payments']['Row']
 export type DocumentRow = Database['public']['Tables']['documents']['Row']

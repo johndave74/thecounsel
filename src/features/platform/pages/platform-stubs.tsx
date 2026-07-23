@@ -1,21 +1,5 @@
-import { LineChart, LifeBuoy, Activity, ShieldCheck, Settings2 } from 'lucide-react'
+import { LifeBuoy, Activity, ShieldCheck, Settings2 } from 'lucide-react'
 import { ModulePlaceholder } from '@/shared/components/module-placeholder'
-
-export const RevenueAnalyticsPage = () => (
-  <ModulePlaceholder
-    title="Revenue Analytics"
-    description="Deep revenue insight beyond the billing dashboard."
-    icon={LineChart}
-    highlights={[
-      'Expansion & contraction MRR',
-      'Cohort revenue',
-      'Net revenue retention',
-      'Forecasting',
-      'Discounts & credits',
-      'Revenue recognition',
-    ]}
-  />
-)
 
 export const SupportTicketsPage = () => (
   <ModulePlaceholder
